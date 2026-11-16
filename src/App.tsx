@@ -2,14 +2,18 @@ import { useState } from 'react';
 import { DepartureChecklist } from './components/DepartureChecklist';
 import { ReceiptCard } from './components/ReceiptCard';
 import { ReceiptForm } from './components/ReceiptForm';
+import { ScanButton } from './components/ScanButton';
 import { TripSummary } from './components/TripSummary';
 import { buildChecklist } from './domain/checklist';
+import { parseReceiptText } from './domain/receiptParser';
 import { sortByDeadline, todayInJapan, tripSummary } from './domain/rules';
 import type { Receipt } from './domain/types';
 import { useTrip } from './store/useTrip';
 
-/** null = 不顯示表單；'new' = 新增；Receipt = 編輯這張 */
-type Editing = null | 'new' | Receipt;
+type Editing =
+  | null
+  | { mode: 'new'; draft?: Receipt; scan?: { text: string; total?: number } }
+  | { mode: 'edit'; receipt: Receipt };
 
 export default function App() {
   const { trip, dispatch } = useTrip();
@@ -18,7 +22,7 @@ export default function App() {
   const summary = tripSummary(trip, today);
 
   function handleSave(receipt: Receipt) {
-    dispatch({ type: editing === 'new' ? 'addReceipt' : 'updateReceipt', receipt });
+    dispatch({ type: editing?.mode === 'edit' ? 'updateReceipt' : 'addReceipt', receipt });
     setEditing(null);
   }
 
@@ -35,16 +39,21 @@ export default function App() {
 
       {editing ? (
         <ReceiptForm
-          key={editing === 'new' ? 'new' : editing.id}
+          key={editing.mode === 'edit' ? editing.receipt.id : (editing.draft?.id ?? 'new')}
           today={today}
-          initial={editing === 'new' ? undefined : editing}
+          title={editing.mode === 'edit' ? '編輯收據' : editing.scan ? '核對掃描結果' : '新增收據'}
+          initial={editing.mode === 'edit' ? editing.receipt : editing.draft}
+          scan={editing.mode === 'new' ? editing.scan : undefined}
           onSave={handleSave}
           onCancel={() => setEditing(null)}
         />
       ) : (
-        <button type="button" className="add" onClick={() => setEditing('new')}>
-          ＋ 新增收據
-        </button>
+        <>
+          <ScanButton onScanned={(text) => setEditing(draftFromScan(text, today))} />
+          <button type="button" className="add secondary" onClick={() => setEditing({ mode: 'new' })}>
+            ＋ 手動新增收據
+          </button>
+        </>
       )}
 
       {trip.receipts.length === 0 && !editing && (
@@ -57,7 +66,7 @@ export default function App() {
           receipt={r}
           today={today}
           departureDate={trip.departureDate}
-          onEdit={() => setEditing(r)}
+          onEdit={() => setEditing({ mode: 'edit', receipt: r })}
           onDelete={() => dispatch({ type: 'deleteReceipt', id: r.id })}
         />
       ))}
@@ -76,4 +85,21 @@ export default function App() {
       </footer>
     </main>
   );
+}
+
+/** 把掃描文字轉成「尚未儲存」的收據草稿 */
+function draftFromScan(text: string, today: string): Editing {
+  const parsed = parseReceiptText(text);
+  const draft: Receipt = {
+    id: crypto.randomUUID(),
+    storeName: parsed.storeName ?? '',
+    purchaseDate: parsed.purchaseDate ?? today,
+    refundMethod: 'unknown',
+    items: parsed.items.map((item) => ({
+      ...item,
+      id: crypto.randomUUID(),
+      isConsumable: false,
+    })),
+  };
+  return { mode: 'new', draft, scan: { text, total: parsed.total } };
 }

@@ -4,8 +4,11 @@ import { refundMethodLabels } from '../labels';
 
 interface Props {
   today: string;
-  /** 有傳就是編輯模式 */
+  /** 預先填好的內容（編輯或掃描結果） */
   initial?: Receipt;
+  title: string;
+  /** 掃描來的原始文字和合計，給使用者核對用 */
+  scan?: { text: string; total?: number };
   onSave: (receipt: Receipt) => void;
   onCancel: () => void;
 }
@@ -28,7 +31,7 @@ const blankItem = (): ItemDraft => ({
   isConsumable: false,
 });
 
-export function ReceiptForm({ today, initial, onSave, onCancel }: Props) {
+export function ReceiptForm({ today, initial, title, scan, onSave, onCancel }: Props) {
   const [storeName, setStoreName] = useState(initial?.storeName ?? '');
   const [purchaseDate, setPurchaseDate] = useState(initial?.purchaseDate ?? today);
   const [refundMethod, setRefundMethod] = useState<RefundMethod>(initial?.refundMethod ?? 'unknown');
@@ -73,7 +76,27 @@ export function ReceiptForm({ today, initial, onSave, onCancel }: Props) {
 
   return (
     <form className="card form" onSubmit={handleSubmit}>
-      <h2>{initial ? '編輯收據' : '新增收據'}</h2>
+      <h2>{title}</h2>
+      {scan && (
+        <div className="scan-notice">
+          <p>
+            已從照片填入，<strong>請逐項核對</strong>，辨識常會讀錯數字。
+            {scan.total !== undefined && (
+              <>
+                {' '}收據合計 ¥{scan.total.toLocaleString()}，品項加總 ¥
+                {items.reduce((sum, i) => sum + (Number(i.price) || 0), 0).toLocaleString()}
+                {items.reduce((sum, i) => sum + (Number(i.price) || 0), 0) === scan.total
+                  ? '，一致 ✓'
+                  : '，不一致，請檢查'}
+              </>
+            )}
+          </p>
+          <details>
+            <summary>看辨識原文</summary>
+            <pre>{scan.text}</pre>
+          </details>
+        </div>
+      )}
       <p className="muted small">一張收據填一筆。同一張收據的商品，出境時要全部帶著。</p>
 
       <label className="field">

@@ -58,3 +58,11 @@ button.add { width: 100%; padding: 14px; }
 .check-list .checked { text-decoration: line-through; color: #9ca3af; }
 .detail { display: block; font-weight: 400; margin-top: 2px; text-decoration: none; }
 .ok { color: #15803d; font-weight: 600; }
+.scan { display: grid; gap: 6px; }
+.scan-status { display: grid; gap: 4px; }
+.scan-status .progress { margin: 0; }
+.scan-tip { margin: 0; text-align: center; }
+button:disabled { opacity: 0.6; cursor: wait; }
+.scan-notice { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 10px 12px; font-size: 0.9rem; }
+.scan-notice p { margin: 0 0 6px; }
+.scan-notice pre { white-space: pre-wrap; font-size: 0.8rem; max-height: 200px; overflow: auto; background: #fff; padding: 8px; border-radius: 6px; }
