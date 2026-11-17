@@ -33,31 +33,42 @@ export function parseReceiptText(raw: string): ParsedReceipt {
   let total: number | undefined;
   let purchaseDate: string | undefined;
 
+  // 品名和金額被 OCR 拆成兩行時，先記住上一行的品名
+  let pendingName: string | undefined;
+
   for (const line of lines) {
     const date = findDate(line);
     if (date) {
       purchaseDate ??= date;
+      pendingName = undefined;
       continue; // 日期那一行不會是商品
     }
 
-    if (/^(合計|総合計|お買上げ?合計|お買い上げ合計)/.test(line)) {
+    if (/^(合計|総合計|総計|お買上げ?合計|お買い上げ合計|ご?請求)/.test(line)) {
       total ??= findPrice(line);
+      pendingName = undefined;
       continue;
     }
-    if (SKIP.test(line)) continue;
+    if (SKIP.test(line)) {
+      pendingName = undefined;
+      continue;
+    }
 
     const price = findPrice(line);
-    if (price === undefined) continue;
+    const name = cleanName(line.replace(PRICE_AT_END, ''));
 
-    const name = line
-      .replace(PRICE_AT_END, '')
-      .replace(reducedMark, '')
-      .replace(/\s+\d+(個|点|コ)\s*$/, '')
-      .trim();
-    if (!name || /^\d+$/.test(name)) continue;
+    if (price === undefined) {
+      // 沒有金額、但看起來像品名：可能金額在下一行
+      pendingName = looksLikeName(name) ? name : undefined;
+      continue;
+    }
+
+    const finalName = looksLikeName(name) ? name : pendingName;
+    pendingName = undefined;
+    if (!finalName) continue;
 
     items.push({
-      name,
+      name: finalName,
       priceInclTax: price,
       taxRate: hasReducedLegend && reducedMark.test(line) ? 8 : 10,
     });
@@ -66,22 +77,51 @@ export function parseReceiptText(raw: string): ParsedReceipt {
   return { storeName: findStoreName(lines), purchaseDate, items, total };
 }
 
-/** 全形轉半形、統一 ¥ 符號、去掉多餘空白 */
+const JA = '\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}ー・々';
+const SPACE_BETWEEN_JA = new RegExp(`(?<=[${JA}])\\s+(?=[${JA}])`, 'gu');
+
+/**
+ * 全形轉半形、統一 ¥ 符號、去掉 OCR 多塞的空白：
+ * 「ハ ダ ラ ボ」→「ハダラボ」、「1, 980」→「1,980」
+ */
 function normalize(line: string): string {
-  return line.normalize('NFKC').replace(/[￥]/g, '¥').replace(/\s+/g, ' ').trim();
+  return line
+    .normalize('NFKC')
+    .replace(/[￥]/g, '¥')
+    .replace(/\s+/g, ' ')
+    .replace(SPACE_BETWEEN_JA, '')
+    .replace(/(?<=\d)\s+(?=[\d,])|(?<=\d,)\s+(?=\d)/g, '')
+    .trim();
+}
+
+function cleanName(text: string): string {
+  return text
+    .replace(/[※*]/g, '')
+    .replace(/\s+\d+\s*(個|点|コ|x|X)?\s*$/, '') // 行尾的數量
+    .replace(/^\d{4,}\s*/, '') // 行首的商品代碼
+    .trim();
+}
+
+/** 至少有 2 個文字（不是只有數字或符號）才當成品名 */
+function looksLikeName(text: string): boolean {
+  return text.replace(/[^\p{L}]/gu, '').length >= 2;
 }
 
 /** 這些行有金額，但不是商品 */
 const SKIP =
   /(小計|税込|税抜|内税|外税|消費税|対象|お預|預り|預かり|お釣|釣銭|おつり|クレジット|カード|現金|値引|割引|ポイント|点数|買上点数|合計点数|TEL|電話|No\.|レジ|責任者|領収)/i;
 
-/** 行尾的金額，例如「¥1,980」「1,980円」「1980」 */
-const PRICE_AT_END = /[¥\\]?\s*(\d{1,3}(?:,\d{3})+|\d+)\s*円?\s*(?:内?[*※])?\s*$/;
+/**
+ * 行尾的金額，例如「¥1,980」「1,980円」「1980内」「\\1,980※」。
+ * OCR 常把 ¥ 讀成 \\ 或 Y，也常在金額後面帶「内」「外」「軽」等稅別記號。
+ */
+const PRICE_AT_END =
+  /(?:[¥\\Y]|\s)\s*(\d{1,3}(?:[,.]\d{3})+|\d+)\s*円?\s*[内外軽※*TＴ]{0,2}\s*$|^\s*[¥\\Y]?\s*(\d{1,3}(?:[,.]\d{3})+|\d+)\s*円?\s*[内外軽※*TＴ]{0,2}\s*$/;
 
 function findPrice(line: string): number | undefined {
   const m = line.match(PRICE_AT_END);
   if (!m) return undefined;
-  const value = Number(m[1].replace(/,/g, ''));
+  const value = Number((m[1] ?? m[2]).replace(/[,.]/g, ''));
   // 太小多半是數量或代碼，太大多半是條碼或電話
   if (!Number.isFinite(value) || value < 10 || value > 10_000_000) return undefined;
   return value;

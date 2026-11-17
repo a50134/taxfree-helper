@@ -18,3 +18,12 @@ export const refundMethodLabels: Record<RefundMethod, string> = {
   bank: '銀行轉帳',
   app: 'App',
 };
+
+/** 退款方式的差別。能用哪幾種、手續費多少，由各店或代辦業者決定 */
+export const refundMethodHints: Record<RefundMethod, string> = {
+  unknown: '結帳時店員會請你選，可以先問清楚手續費。',
+  cash: '出境時在機場領日圓現金，最快拿到；但可能要排隊，有些店會收手續費。',
+  card: '退回刷卡的那張信用卡，不用排隊；入帳通常要等一段時間。',
+  bank: '匯到你指定的銀行帳戶；海外帳戶可能有匯款手續費。',
+  app: '透過店家指定的 App 或線上服務領取，要先註冊。',
+};

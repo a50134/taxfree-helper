@@ -21,11 +21,11 @@ TEL 06-0000-0000
 describe('parseReceiptText', () => {
   it('讀出店名、日期、品項和合計', () => {
     const r = parseReceiptText(drugstore);
-    expect(r.storeName).toBe('マツモトキヨシ 心斎橋店');
+    expect(r.storeName).toBe('マツモトキヨシ心斎橋店');
     expect(r.purchaseDate).toBe('2026-11-16');
     expect(r.total).toBe(3454);
     expect(r.items).toEqual([
-      { name: 'ハダラボ 化粧水', priceInclTax: 1980, taxRate: 10 },
+      { name: 'ハダラボ化粧水', priceInclTax: 1980, taxRate: 10 },
       { name: 'ロキソニンS', priceInclTax: 1078, taxRate: 10 },
       { name: 'ポッキー', priceInclTax: 396, taxRate: 8 },
     ]);
@@ -46,6 +46,27 @@ describe('parseReceiptText', () => {
   it('沒有軽減税率說明時，※ 不會被當成 8%', () => {
     const r = parseReceiptText('店\n※特価 Tシャツ ¥2,990');
     expect(r.items[0]).toEqual({ name: '特価 Tシャツ', priceInclTax: 2990, taxRate: 10 });
+  });
+
+  it('能處理 OCR 常見的錯：字中間多空白、¥ 讀成 \\ 或 Y、數字被拆開、金額跑到下一行', () => {
+    const ocr = [
+      'ド ン ・ キ ホ ー テ 道 頓 堀 店',
+      '2026 年 11 月 17 日',
+      '4901234567890 キ ッ ト カ ッ ト',
+      '\\1, 280 内',
+      'ヘアアイロン Y8,980',
+      'ア イ マ ス ク     598 外',
+      '合 計 ¥10, 858',
+    ].join('\n');
+    const r = parseReceiptText(ocr);
+    expect(r.storeName).toBe('ドン・キホーテ道頓堀店');
+    expect(r.purchaseDate).toBe('2026-11-17');
+    expect(r.items).toEqual([
+      { name: 'キットカット', priceInclTax: 1280, taxRate: 10 },
+      { name: 'ヘアアイロン', priceInclTax: 8980, taxRate: 10 },
+      { name: 'アイマスク', priceInclTax: 598, taxRate: 10 },
+    ]);
+    expect(r.total).toBe(10858);
   });
 
   it('讀不到東西時回傳空結果，不會出錯', () => {

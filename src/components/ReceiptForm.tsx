@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import type { Item, Receipt, RefundMethod, TaxRate } from '../domain/types';
-import { refundMethodLabels } from '../labels';
+import { refundMethodHints, refundMethodLabels } from '../labels';
 
 interface Props {
   today: string;
@@ -36,7 +36,9 @@ export function ReceiptForm({ today, initial, title, scan, onSave, onCancel }: P
   const [purchaseDate, setPurchaseDate] = useState(initial?.purchaseDate ?? today);
   const [refundMethod, setRefundMethod] = useState<RefundMethod>(initial?.refundMethod ?? 'unknown');
   const [items, setItems] = useState<ItemDraft[]>(
-    initial?.items.map((i) => ({ ...i, price: String(i.priceInclTax) })) ?? [blankItem()],
+    initial && initial.items.length > 0
+      ? initial.items.map((i) => ({ ...i, price: String(i.priceInclTax) }))
+      : [blankItem()],
   );
   const [error, setError] = useState('');
 
@@ -80,7 +82,16 @@ export function ReceiptForm({ today, initial, title, scan, onSave, onCancel }: P
       {scan && (
         <div className="scan-notice">
           <p>
-            已從照片填入，<strong>請逐項核對</strong>，辨識常會讀錯數字。
+            {initial && initial.items.length === 0 ? (
+              <>
+                <strong>沒有讀到品項</strong>，請手動輸入。可以展開下方的辨識原文對照，
+                或重拍一次（平放、光線充足、只拍收據）。
+              </>
+            ) : (
+              <>
+                已從照片填入，<strong>請逐項核對</strong>，辨識常會讀錯數字。
+              </>
+            )}
             {scan.total !== undefined && (
               <>
                 {' '}收據合計 ¥{scan.total.toLocaleString()}，品項加總 ¥
@@ -117,6 +128,7 @@ export function ReceiptForm({ today, initial, title, scan, onSave, onCancel }: P
               </option>
             ))}
           </select>
+          <span className="muted small">{refundMethodHints[refundMethod]}</span>
         </label>
       </div>
 
